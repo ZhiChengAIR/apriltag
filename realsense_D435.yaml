@@ -1,0 +1,25 @@
+realsense:
+  stream:
+    width: 640
+    height: 480
+    fps: 30
+
+  rgb_sensor:  # D435 color sensor
+    # --- 强烈建议关闭自动 ---
+    enable_auto_exposure: 0
+    enable_auto_white_balance: 0
+
+    # --- 曝光链路（最关键）---
+    # exposure 单位通常是 microseconds（RealSense SDK里 exposure 语义为“曝光时间”，范围随固件而变）
+    exposure: 200        # 8000us = 8ms，室内常用起步值
+    gain: 0            # 常用起步值：50~100 之间试
+
+    # --- 白平衡（色温，单位 Kelvin）---
+    white_balance: 5000   # 室内白光常见：4000~5000；偏冷可到 6500
+
+    # --- 下面这些“可选”，对 AprilTag 的收益不如上面三项 ---
+    brightness: 0         # -64~64 常见
+    contrast: 50          # 0~100 常见（不同固件范围可能不同）
+    gamma: 300            # 常见 100~500
+    saturation: 64        # 0~100 or 0~64（视固件）
+    sharpness: 50         # 0~100 常见
