@@ -33,6 +33,7 @@ import yaml
 import os
 from collections import deque
 from pathlib import Path
+from datetime import datetime
 
 
 class AprilTagTracker:
@@ -457,57 +458,6 @@ class AprilTagTracker:
             cv2.putText(image, str(i), (pts[i][0] + 10, pts[i][1] - 10),
                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, colors[i], 2)
 
-    def draw_camera_orientation_viz(self, image, R_left):
-        """
-        Draw a visualization showing camera orientation relative to tag.
-        """
-        _, w = image.shape[:2]
-
-        # Visualization area (top right)
-        cx, cy = w - 100, 130
-        size = 40
-
-        # Draw background
-        cv2.rectangle(image, (w - 190, 60), (w - 10, 200), (30, 30, 30), -1)
-        cv2.rectangle(image, (w - 190, 60), (w - 10, 200), (100, 100, 100), 1)
-        cv2.putText(image, "Camera Axes", (w - 180, 78), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 200, 200), 1)
-
-        # Camera coordinate axes transformed by R_left
-        axes = {
-            'X': (R_left @ np.array([1, 0, 0])) * size,
-            'Y': (R_left @ np.array([0, 1, 0])) * size,
-            'Z': (R_left @ np.array([0, 0, 1])) * size,
-        }
-        colors = {'X': (0, 0, 255), 'Y': (0, 255, 0), 'Z': (255, 0, 0)}
-
-        # Project to 2D (isometric-like)
-        def to_2d(v):
-            x = v[0] - v[1] * 0.3
-            y = -v[2] - v[1] * 0.3
-            return int(cx + x), int(cy + y)
-
-        # Draw tag reference (small square)
-        tag_size = 15
-        tag_pts = [
-            (cx - tag_size, cy - tag_size),
-            (cx + tag_size, cy - tag_size),
-            (cx + tag_size, cy + tag_size),
-            (cx - tag_size, cy + tag_size)
-        ]
-        cv2.polylines(image, [np.array(tag_pts)], True, (100, 100, 100), 1)
-
-        # Sort axes by depth (Y component) for proper occlusion
-        sorted_axes = sorted(axes.items(), key=lambda x: -x[1][1])
-
-        for name, vec in sorted_axes:
-            end = to_2d(vec)
-            cv2.arrowedLine(image, (cx, cy), end, colors[name], 2, tipLength=0.3)
-            cv2.putText(image, name, (end[0] + 3, end[1] + 3),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.35, colors[name], 1)
-
-        # Legend
-        cv2.putText(image, "X:L/R Y:Depth Z:U/D", (w - 180, 195),
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.3, (150, 150, 150), 1)
 
     def draw_ui(self, image, pose_data, fps, frame_dropped=False):
         """
@@ -554,15 +504,10 @@ class AprilTagTracker:
                        (20, 175),
                        cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 200, 200), 1)
 
-            # Draw 3D camera axes visualization
-            self.draw_camera_orientation_viz(image, pose_data['R_left'])
-
         else:
-            # No tag detected
-            cv2.rectangle(image, (10, 10), (280, 70), (20, 20, 20), -1)
-            cv2.rectangle(image, (10, 10), (280, 70), (80, 80, 80), 1)
+            # No tag detected - show message on camera stream
             cv2.putText(image, "NO TAG DETECTED", (20, 40),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
         # FPS display
         cv2.rectangle(image, (w - 100, 10), (w - 10, 45), (20, 20, 20), -1)
@@ -641,8 +586,6 @@ class AprilTagTracker:
         print("  q = Quit")
         print("=" * 70)
         print("\nLive pose:\n")
-
-        snapshot_count = 0
 
         try:
             while True:
@@ -732,11 +675,11 @@ class AprilTagTracker:
                     self.show_overlay = not self.show_overlay
                     print(f"\n[UI] Overlay: {'ON' if self.show_overlay else 'OFF'}")
                 elif key == ord('x'):
-                    # Snapshot
-                    fn = self.output_dir / f"snapshot_{snapshot_count:03d}.png"
+                    # Snapshot with datetime
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    fn = self.output_dir / f"snapshot_{timestamp}.png"
                     cv2.imwrite(str(fn), display)
                     print(f"\n[SNAPSHOT] Saved: {fn}")
-                    snapshot_count += 1
                 elif key == ord('d'):
                     # Debug: comprehensive diagnostics
                     if pose_data:
@@ -795,6 +738,6 @@ class AprilTagTracker:
 
 
 if __name__ == "__main__":
-    TAG_SIZE_MM = 32.0  # Your tag size: 3.2 cm = 32 mm
+    TAG_SIZE_MM = 31.0  # Your tag size: 3.1 cm = 31 mm
     tracker = AprilTagTracker(tag_size_mm=TAG_SIZE_MM)
     tracker.run()
