@@ -31,22 +31,25 @@ from apriltag import apriltag
 import time
 import yaml
 import os
+import argparse
 from collections import deque
 from pathlib import Path
 from datetime import datetime
 
 
 class AprilTagTracker:
-    def __init__(self, tag_size_mm=32.0, config_file="realsense_D435.yaml"):
+    def __init__(self, tag_size_mm=32.0, tag_family="tagStandard41h12", config_file="realsense_D435.yaml"):
         """
         Initialize AprilTag tracker with RealSense D435
 
         Args:
             tag_size_mm: AprilTag size in millimeters
+            tag_family: AprilTag family (e.g., "tagStandard41h12", "tag36h11", "tag25h9")
             config_file: Path to YAML config file with camera parameters
         """
         self.tag_size_mm = tag_size_mm
         self.tag_size_m = tag_size_mm / 1000.0
+        self.tag_family = tag_family
 
         # Load camera configuration from YAML
         self.camera_params = self._load_camera_config(config_file)
@@ -97,7 +100,8 @@ class AprilTagTracker:
         self.frame_drop_count = 0
 
         # Initialize AprilTag detector
-        self.detector = apriltag("tagStandard41h12")
+        self.detector = apriltag(self.tag_family)
+        print(f"AprilTag detector initialized: {self.tag_family}")
 
         # 3D object points for tag corners in TAG coordinate frame
         # Origin at tag center, Z=0 (planar tag)
@@ -569,7 +573,7 @@ class AprilTagTracker:
         print("\n" + "=" * 70)
         print("AprilTag 6DOF Pose Tracker - RealSense D435")
         print("=" * 70)
-        print(f"Tag: tagStandard41h12 | ID: 0 | Size: {self.tag_size_mm} mm")
+        print(f"Tag Family: {self.tag_family} | ID: 0 | Size: {self.tag_size_mm} mm")
         print("\nCOORDINATE SYSTEM (AprilTag Library Convention):")
         print("  Output: Tag pose in Camera frame")
         print("  X: Right(+) in image")
@@ -738,6 +742,33 @@ class AprilTagTracker:
 
 
 if __name__ == "__main__":
-    TAG_SIZE_MM = 31.0  # Your tag size: 3.1 cm = 31 mm
-    tracker = AprilTagTracker(tag_size_mm=TAG_SIZE_MM)
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='AprilTag 6DOF Pose Tracker')
+    parser.add_argument('--tag-family', type=str, default='tagStandard41h12',
+                        help='AprilTag family (e.g., tagStandard41h12, tag36h11, tag25h9, tag16h5)')
+    parser.add_argument('--tag-size', type=float, default=31.0,
+                        help='Tag size in millimeters')
+    parser.add_argument('--config', type=str, default='realsense_D435.yaml',
+                        help='Camera config YAML file')
+    args = parser.parse_args()
+
+    # Easy override: Uncomment and modify to override command line args
+    # TAG_FAMILY = "tag36h11"
+    # TAG_SIZE_MM = 50.0
+
+    # Use command line args (or override if defined above)
+    tag_family = args.tag_family
+    tag_size_mm = args.tag_size
+    config_file = args.config
+
+    # Uncomment these to use overrides instead of command line args
+    # tag_family = TAG_FAMILY if 'TAG_FAMILY' in locals() else tag_family
+    # tag_size_mm = TAG_SIZE_MM if 'TAG_SIZE_MM' in locals() else tag_size_mm
+
+    # Initialize and run tracker
+    tracker = AprilTagTracker(
+        tag_size_mm=tag_size_mm,
+        tag_family=tag_family,
+        config_file=config_file
+    )
     tracker.run()
