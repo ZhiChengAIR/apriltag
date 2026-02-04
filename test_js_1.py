@@ -285,6 +285,48 @@ class AprilTagTracker:
         error = np.sqrt(np.mean(np.sum(diff**2, axis=1)))
         return error
 
+    def refine_corners_subpix(self, gray, corners):
+        """
+        Refine detected corners to sub-pixel accuracy.
+        Args:
+            gray: grayscale image
+            corners: Nx2 array
+        Returns:
+            refined corners Nx2 array
+        """
+        criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 1e-3)
+        corners_np = corners.astype(np.float32).reshape(-1, 1, 2)
+        cv2.cornerSubPix(gray, corners_np, (5, 5), (-1, -1), criteria)
+        return corners_np.reshape(-1, 2)
+
+    def refine_pose(self, corners, rvec, tvec):
+        """
+        Refine pose using Levenberg-Marquardt if available.
+        Returns refined (rvec, tvec).
+        """
+        try:
+            rvec_refined, tvec_refined = cv2.solvePnPRefineLM(
+                self.object_points,
+                corners,
+                self.camera_matrix,
+                self.dist_coeffs,
+                rvec,
+                tvec
+            )
+            return rvec_refined, tvec_refined
+        except Exception:
+            return rvec, tvec
+
+    def compute_tag_size_px(self, corners):
+        """Compute average tag size in pixels from corner geometry."""
+        p0, p1, p2, p3 = corners
+        width_top = np.linalg.norm(p1 - p0)
+        width_bottom = np.linalg.norm(p2 - p3)
+        height_left = np.linalg.norm(p3 - p0)
+        height_right = np.linalg.norm(p2 - p1)
+        avg_size_px = (width_top + width_bottom + height_left + height_right) / 4.0
+        return avg_size_px
+
     def rotation_to_euler(self, R):
         """
         Convert rotation matrix to Euler angles (roll, pitch, yaw).
@@ -396,11 +438,15 @@ class AprilTagTracker:
 
         # Get corners
         corners = self.get_corners_from_detection(target_det)
+        corners = self.refine_corners_subpix(gray, corners)
 
         # Estimate pose
         success, rvec, tvec = self.estimate_pose(corners)
         if not success:
             return None
+
+        # Refine pose (optional)
+        rvec, tvec = self.refine_pose(corners, rvec, tvec)
 
         # Compute reprojection error
         reproj_err = self.compute_reprojection_error(corners, rvec, tvec)
@@ -418,6 +464,8 @@ class AprilTagTracker:
         pitch = np.arctan2(-R[2, 0], np.sqrt(R[0, 0]**2 + R[1, 0]**2))
         yaw = np.arctan2(R[1, 0], R[0, 0])
 
+        tag_size_px = self.compute_tag_size_px(corners)
+
         return {
             'x_mm': x_mm,
             'y_mm': y_mm,
@@ -426,6 +474,7 @@ class AprilTagTracker:
             'pitch': pitch,
             'yaw': yaw,
             'reproj_error': reproj_err,
+            'tag_size_px': tag_size_px,
             'corners': corners,
             'rvec': rvec,
             'tvec': tvec,
@@ -511,6 +560,10 @@ class AprilTagTracker:
                        cv2.FONT_HERSHEY_SIMPLEX, 0.45, (100, 255, 100), 1)
             cv2.putText(image, f"  Z: {pose_data['z_mm']:8.1f}", (20, 130),
                        cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 100, 100), 1)
+
+            # Tag pixel size
+            cv2.putText(image, f"Tag size: {pose_data['tag_size_px']:.1f} px", (20, 145),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.45, (200, 200, 200), 1)
 
             # Orientation
             cv2.putText(image, "Orientation (rad):", (20, 155),
