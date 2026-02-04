@@ -38,7 +38,8 @@ from datetime import datetime
 
 
 class AprilTagTracker:
-    def __init__(self, tag_size_mm=32.0, tag_family="tagStandard41h12", config_file="realsense_D435.yaml"):
+    def __init__(self, tag_size_mm=32.0, tag_family="tagStandard41h12", config_file="realsense_D435.yaml",
+                 resolution=None):
         """
         Initialize AprilTag tracker with RealSense D435
 
@@ -58,11 +59,21 @@ class AprilTagTracker:
         self.pipeline = rs.pipeline()
         self.config = rs.config()
 
-        # Configure streams from YAML
+        # Configure streams from YAML (optionally overridden by CLI resolution preset)
         stream_config = self.camera_params.get('stream', {})
         width = stream_config.get('width', 640)
         height = stream_config.get('height', 480)
         fps = stream_config.get('fps', 30)
+
+        resolution_map = {
+            "low": (640, 480),
+            "medium": (1280, 720),
+            "high": (1920, 1080),
+        }
+        if resolution:
+            if resolution not in resolution_map:
+                raise ValueError(f"Unknown resolution preset: {resolution}")
+            width, height = resolution_map[resolution]
         self.config.enable_stream(rs.stream.color, width, height, rs.format.bgr8, fps)
 
         # Start pipeline
@@ -750,6 +761,8 @@ if __name__ == "__main__":
                         help='Tag size in millimeters')
     parser.add_argument('--config', type=str, default='realsense_D435.yaml',
                         help='Camera config YAML file')
+    parser.add_argument('--resolution', type=str, choices=['low', 'medium', 'high'], default=None,
+                        help='Resolution preset: low=640x480, medium=1280x720, high=1920x1080')
     args = parser.parse_args()
 
     # Easy override: Uncomment and modify to override command line args
@@ -760,6 +773,7 @@ if __name__ == "__main__":
     tag_family = args.tag_family
     tag_size_mm = args.tag_size
     config_file = args.config
+    resolution = args.resolution
 
     # Uncomment these to use overrides instead of command line args
     # tag_family = TAG_FAMILY if 'TAG_FAMILY' in locals() else tag_family
@@ -769,6 +783,7 @@ if __name__ == "__main__":
     tracker = AprilTagTracker(
         tag_size_mm=tag_size_mm,
         tag_family=tag_family,
-        config_file=config_file
+        config_file=config_file,
+        resolution=resolution
     )
     tracker.run()
