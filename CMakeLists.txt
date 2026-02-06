@@ -5,7 +5,7 @@ if(POLICY CMP0077)
     cmake_policy(SET CMP0077 NEW)
 endif()
 option(BUILD_SHARED_LIBS "Build shared libraries" ON)
-option(BUILD_EXAMPLES "Build example executables" ON)
+option(BUILD_EXAMPLES "Build example executables" OFF)
 option(ASAN "Use AddressSanitizer for debug builds to detect memory issues" OFF)
 
 if (ASAN)
@@ -204,7 +204,7 @@ elseif(BUILD_PYTHON_WRAPPER)
 endif()
 
 # Examples
-if (BUILD_EXAMPLES)
+if (BUILD_EXAMPLES AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/example")
     # apriltag_demo
     add_executable(apriltag_demo example/apriltag_demo.c)
     target_link_libraries(apriltag_demo ${PROJECT_NAME})
@@ -233,7 +233,7 @@ if (BUILD_EXAMPLES)
     install(TARGETS apriltag_demo RUNTIME DESTINATION bin)
 endif()
 
-if(BUILD_TESTING)
+if(BUILD_TESTING AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/test")
     enable_testing()
     add_subdirectory(test)
 endif()

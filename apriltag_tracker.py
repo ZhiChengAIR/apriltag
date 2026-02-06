@@ -161,8 +161,9 @@ class AprilTagPoseTracker:
                 raise ValueError(f"Unknown resolution preset: {resolution}")
             width, height = resolution_map[resolution]
 
-        self.config.enable_stream(rs.stream.color, width, height, rs.format.bgr8, fps)
-        self.profile = self.pipeline.start(self.config)
+        self.color_format = rs.format.bgr8
+        self.color_to_gray_code = cv2.COLOR_BGR2GRAY
+        self._start_pipeline(width, height, fps)
 
         color_stream = self.profile.get_stream(rs.stream.color)
         intrinsics = color_stream.as_video_stream_profile().get_intrinsics()
@@ -220,6 +221,66 @@ class AprilTagPoseTracker:
                 if "RGB Camera" in sensor_name:
                     return sensor
         return None
+
+    def _list_color_profiles(self):
+        ctx = rs.context()
+        devices = ctx.query_devices()
+        if len(devices) == 0:
+            return []
+        dev = devices[0]
+        profiles = []
+        for sensor in dev.query_sensors():
+            if not sensor.supports(rs.camera_info.name):
+                continue
+            sensor_name = sensor.get_info(rs.camera_info.name)
+            if "RGB Camera" not in sensor_name:
+                continue
+            for p in sensor.get_stream_profiles():
+                if p.stream_type() != rs.stream.color:
+                    continue
+                vsp = p.as_video_stream_profile()
+                profiles.append((vsp.width(), vsp.height(), vsp.fps(), vsp.format()))
+        return profiles
+
+    def _select_best_profile(self, profiles, width, height, fps):
+        best = None
+        best_score = float("inf")
+        for w, h, f, fmt in profiles:
+            if fmt not in (rs.format.bgr8, rs.format.rgb8):
+                continue
+            score = abs(w - width) + abs(h - height) + abs(f - fps) * 10
+            if fmt == rs.format.bgr8:
+                score -= 1.0
+            if score < best_score:
+                best_score = score
+                best = (w, h, f, fmt)
+        return best
+
+    def _start_pipeline(self, width, height, fps):
+        for fmt, gray_code in [
+            (rs.format.bgr8, cv2.COLOR_BGR2GRAY),
+            (rs.format.rgb8, cv2.COLOR_RGB2GRAY),
+        ]:
+            self.config = rs.config()
+            self.config.enable_stream(rs.stream.color, width, height, fmt, fps)
+            try:
+                self.profile = self.pipeline.start(self.config)
+                self.color_format = fmt
+                self.color_to_gray_code = gray_code
+                return
+            except RuntimeError:
+                pass
+
+        profiles = self._list_color_profiles()
+        best = self._select_best_profile(profiles, width, height, fps)
+        if best is None:
+            raise RuntimeError("No supported RGB stream profile found for this device.")
+        w, h, f, fmt = best
+        self.config = rs.config()
+        self.config.enable_stream(rs.stream.color, w, h, fmt, f)
+        self.profile = self.pipeline.start(self.config)
+        self.color_format = fmt
+        self.color_to_gray_code = cv2.COLOR_BGR2GRAY if fmt == rs.format.bgr8 else cv2.COLOR_RGB2GRAY
 
     def _configure_camera_parameters(self):
         rgb_sensor = self._find_rgb_sensor()
@@ -325,7 +386,7 @@ class AprilTagPoseTracker:
         if not color_frame:
             return None
         color_image = np.asanyarray(color_frame.get_data())
-        gray = cv2.cvtColor(color_image, cv2.COLOR_BGR2GRAY)
+        gray = cv2.cvtColor(color_image, self.color_to_gray_code)
         detections = self.detector.detect(gray)
         target = None
         for det in detections:

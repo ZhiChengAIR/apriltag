@@ -221,3 +221,52 @@ You can generate your own tag families using our other repo, [AprilTag-Generatio
 Support
 =======
 Please create an issue on this GitHub for any questions instead of sending a private message. This allows other people with the same question to find your answer.
+
+PROJECT-SPECIFIC NOTES (OUR CONTRIBUTION)
+=========================================
+This section is added by our team for the streamlined RealSense D435 + Python workflow.
+
+Scope
+=====
+- Supported tag families in this repo: `tagStandard41h12`, `tag36h11`.
+- Primary scripts: `test_js_1.py`, `test_js_2.py`, `apriltag_tracker.py`, `realsense_D435.yaml`.
+- `apriltag_tracker.py` is a library module intended to be imported and called from your own scripts (not a CLI).
+
+Dependencies For Our Code
+=========================
+- Build tools for the local C/Python wrapper: `cmake`, a C compiler, and standard build tools.
+- Python packages: `numpy`, `opencv-python`, `pyyaml`.
+- Intel RealSense SDK 2 + Python wrapper (`librealsense2` + `pyrealsense2`).
+
+Install For Our Workflow
+========================
+1. Build the local AprilTag library and Python wrapper:
+   - `cmake -B build -DCMAKE_BUILD_TYPE=Release`
+   - `cmake --build build`
+   - `cmake --build build --target install`
+2. Install Python dependencies:
+   - `pip install numpy opencv-python pyyaml`
+3. Install RealSense SDK 2 and `pyrealsense2` for your platform.
+
+Quickest Usage For A New Colleague
+==================================
+1. Add this repo as a submodule in their project.
+2. Install the dependencies listed above.
+3. Import and call the tracker:
+```python
+from apriltag_tracker import AprilTagPoseTracker
+
+tracker = AprilTagPoseTracker(
+    tag_size_mm=31.0,
+    tag_family="tagStandard41h12",
+    tag_id=0,
+    config_file="realsense_D435.yaml",
+    resolution="medium",
+)
+
+pose = tracker.capture_pose(duration_s=0.8, min_frames=12, frame="robot")
+if pose:
+    print(pose["position_mm"], pose["roll"], pose["pitch"], pose["yaw"])
+
+tracker.close()
+```
