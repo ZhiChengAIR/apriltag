@@ -222,9 +222,9 @@ Support
 =======
 Please create an issue on this GitHub for any questions instead of sending a private message. This allows other people with the same question to find your answer.
 
-PROJECT-SPECIFIC NOTES (OUR CONTRIBUTION)
+使用指南
 =========================================
-This section is added by our team for the streamlined RealSense D435 + Python workflow.
+D435 + pose estimation (python)
 
 Scope
 =====
