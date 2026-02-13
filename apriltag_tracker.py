@@ -197,11 +197,29 @@ class AprilTagPoseTracker:
             [0, -1,  0]
         ], dtype=np.float64)
 
+        # Guard against RGB/BGR ambiguity on some RealSense streams.
+        self._gray_code_primary = self.color_to_gray_code
+        self._gray_code_alt = None
+        self._gray_mode = "locked"
+        if self.color_format == rs.format.rgb8:
+            self._gray_code_primary = cv2.COLOR_RGB2GRAY
+            self._gray_code_alt = cv2.COLOR_BGR2GRAY
+            self._gray_mode = "auto"
+
     def close(self):
         self.pipeline.stop()
 
     def _load_camera_config(self, config_file):
         config_path = Path(config_file)
+        if not config_path.exists():
+            alt_path = Path(__file__).resolve().parent / config_file
+            if alt_path.exists():
+                config_path = alt_path
+            else:
+                return {
+                    "stream": {"width": 640, "height": 480, "fps": 30},
+                    "rgb_sensor": {"enable_auto_exposure": 1},
+                }
         if not config_path.exists():
             return {
                 "stream": {"width": 640, "height": 480, "fps": 30},
@@ -212,6 +230,19 @@ class AprilTagPoseTracker:
         if "realsense" not in config:
             return {"stream": {"width": 640, "height": 480, "fps": 30}}
         return config["realsense"]
+
+    def _detect_tags(self, color_image):
+        gray = cv2.cvtColor(color_image, self._gray_code_primary)
+        detections = self.detector.detect(gray)
+        if self._gray_mode == "auto" and not detections and self._gray_code_alt is not None:
+            gray_alt = cv2.cvtColor(color_image, self._gray_code_alt)
+            detections_alt = self.detector.detect(gray_alt)
+            if detections_alt:
+                gray = gray_alt
+                detections = detections_alt
+                self._gray_code_primary = self._gray_code_alt
+                self._gray_mode = "locked"
+        return gray, detections
 
     def _find_rgb_sensor(self):
         device = self.profile.get_device()
@@ -386,8 +417,7 @@ class AprilTagPoseTracker:
         if not color_frame:
             return None
         color_image = np.asanyarray(color_frame.get_data())
-        gray = cv2.cvtColor(color_image, self.color_to_gray_code)
-        detections = self.detector.detect(gray)
+        gray, detections = self._detect_tags(color_image)
         target = None
         for det in detections:
             if det["id"] == self.tag_id:

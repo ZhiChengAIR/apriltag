@@ -2,6 +2,7 @@ import time
 
 import cv2
 import numpy as np
+import pyrealsense2 as rs
 
 from apriltag_tracker import AprilTagPoseTracker
 
@@ -24,7 +25,7 @@ tracker = AprilTagPoseTracker(
       tag_family="tagStandard41h12",
       tag_id=0,
       config_file="realsense_D435.yaml",
-      resolution="medium",
+      resolution="low",
   )
 
 frame_count = 0
@@ -34,6 +35,11 @@ debug_every = 30
 print("Starting debug loop. Press Ctrl+C to stop.")
 print(f"Tag family: {tracker.tag_family} | Tag ID: {tracker.tag_id}")
 print(f"Intrinsics: fx={tracker.camera_matrix[0,0]:.1f}, fy={tracker.camera_matrix[1,1]:.1f}, cx={tracker.camera_matrix[0,2]:.1f}, cy={tracker.camera_matrix[1,2]:.1f}")
+try:
+    vsp = tracker.profile.get_stream(rs.stream.color).as_video_stream_profile()
+    print(f"Stream: {vsp.width()}x{vsp.height()} @ {vsp.fps()}fps, format={vsp.format()}")
+except Exception:
+    print("Stream: (unable to read profile)")
 print(f"Color format: {tracker.color_format}")
 
 try:
@@ -48,9 +54,7 @@ try:
             continue
 
         color_image = np.asanyarray(color_frame.get_data())
-        gray = cv2.cvtColor(color_image, tracker.color_to_gray_code)
-
-        detections = tracker.detector.detect(gray)
+        gray, detections = tracker._detect_tags(color_image)
         if frame_count % debug_every == 0:
             now = time.time()
             fps = debug_every / max(now - last_print, 1e-6)
